@@ -1,0 +1,11 @@
+# Tested with Python 3.9 - 3.12.
+# mediapipe 0.10.14 still ships the classic `mp.solutions.hands` API with a bundled hand model
+# (no download needed) and needs numpy < 2.
+numpy<2
+mediapipe==0.10.14
+opencv-contrib-python
+scikit-learn
+pandas
+matplotlib
+joblib
+pytest
