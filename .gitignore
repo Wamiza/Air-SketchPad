@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.png
+!results/*.png
+!results/.gitkeep
+data/*.csv
+!data/.gitkeep
+models/*.joblib
+models/*.task
+!models/.gitkeep

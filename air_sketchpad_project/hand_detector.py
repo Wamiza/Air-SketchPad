@@ -23,15 +23,22 @@ TASK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "
 
 
 class HandDetector:
-    def __init__(self, min_detection=0.6, min_tracking=0.5):
+    def __init__(self, min_detection=0.4, min_tracking=0.35, fallback_static=True):
         import mediapipe as mp
         self._mp = mp
         self._t0 = None
+        self.fallback_static = fallback_static
+        self._static_hands = None
         if hasattr(mp, "solutions") and hasattr(mp.solutions, "hands"):
             self.backend = "solutions"
             self._hands = mp.solutions.hands.Hands(
                 static_image_mode=False, max_num_hands=1, model_complexity=0,
                 min_detection_confidence=min_detection, min_tracking_confidence=min_tracking)
+            if self.fallback_static:
+                # Fast motion recovery fallback: runs full-frame palm detection if tracking drops
+                self._static_hands = mp.solutions.hands.Hands(
+                    static_image_mode=True, max_num_hands=1, model_complexity=0,
+                    min_detection_confidence=min_detection)
         else:
             self.backend = "tasks"
             from mediapipe.tasks import python as mp_python
@@ -43,7 +50,7 @@ class HandDetector:
                 base_options=mp_python.BaseOptions(model_asset_path=TASK_PATH),
                 running_mode=vision.RunningMode.VIDEO, num_hands=1,
                 min_hand_detection_confidence=min_detection,
-                min_hand_presence_confidence=0.5, min_tracking_confidence=min_tracking)
+                min_hand_presence_confidence=0.35, min_tracking_confidence=min_tracking)
             self._landmarker = vision.HandLandmarker.create_from_options(options)
             self._ts = 0
 
@@ -51,7 +58,10 @@ class HandDetector:
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         if self.backend == "solutions":
             res = self._hands.process(rgb)
-            if not res.multi_hand_landmarks:
+            if (not res or not res.multi_hand_landmarks) and self._static_hands is not None:
+                # If tracking lost the fast-moving hand, immediately recover it via full-frame detector
+                res = self._static_hands.process(rgb)
+            if not res or not res.multi_hand_landmarks:
                 return None
             lm = res.multi_hand_landmarks[0].landmark
             raw = np.array([[p.x, p.y, p.z] for p in lm], dtype=np.float64)
@@ -69,6 +79,8 @@ class HandDetector:
     def close(self):
         if self.backend == "solutions":
             self._hands.close()
+            if self._static_hands is not None:
+                self._static_hands.close()
         else:
             self._landmarker.close()
 

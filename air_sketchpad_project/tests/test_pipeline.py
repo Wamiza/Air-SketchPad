@@ -82,3 +82,15 @@ def test_clear_gesture_held_one_second_wipes_canvas_but_not_before():
 def test_no_hand_frames_do_not_crash():
     app, det = make_app()
     feed(app, det, None, 0.5, 0.0)
+
+
+def test_fast_moving_finger_draws_continuous_stroke():
+    app, det = make_app()
+    # Rapid movement across the frame (speed ~ 0.9 canvas widths/sec)
+    feed(app, det, DRAW, 0.8, 0.0, move=lambda i: (0.2 + i * 0.025, 0.5))
+    assert app.canvas.has_ink()
+    # Check that ink is drawn across the width of the canvas
+    assert app.canvas.img[:, :, 2].max() > 0  # Red ink exists
+    active_cols = (app.canvas.img[:, :, 2] > 0).any(axis=0).nonzero()[0]
+    # Stroke covers a wide span due to fast movement
+    assert active_cols.max() - active_cols.min() > W * 0.4
